@@ -1,0 +1,186 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { KVStore } from '../../lib/kv';
+
+const debtorId = Astro.params.id;
+if (!debtorId) {
+  return Astro.redirect('/');
+}
+
+const { KV } = Astro.locals.runtime.env;
+const kvStore = new KVStore({ KV });
+
+const debtor = await kvStore.getDebtorById(debtorId);
+if (!debtor) {
+  return Astro.redirect('/');
+}
+
+const transactions = await kvStore.getTransactionByDebtorId(debtorId);
+const balance = await kvStore.getDebtorBalance(debtorId);
+
+let message = '';
+let messageType = '';
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const amount = parseInt(formData.get('amount')?.toString() || '0');
+    const description = formData.get('description')?.toString() || 'Pembayaran';
+    
+    if (amount > 0) {
+      await kvStore.createTransaction({
+        debtorId,
+        type: 'payment',
+        amount,
+        description,
+        createdBy: debtorId,
+      });
+      return Astro.redirect(`/guest/${debtorId}?success=paid`);
+    }
+  } catch (e) {
+    message = 'Terjadi kesalahan';
+    messageType = 'error';
+  }
+}
+
+const successParam = Astro.url.searchParams.get('success');
+if (successParam === 'paid') message = 'Pembayaran berhasil dicatat!';
+if (successParam) messageType = 'success';
+
+const updatedBalance = await kvStore.getDebtorBalance(debtorId);
+const updatedTx = await kvStore.getTransactionByDebtorId(debtorId);
+---
+
+<Layout title={debtor.name} isPublic={true}>
+  <div class="space-y-6">
+    <div class="text-center">
+      <div class="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+        <span class="text-3xl font-bold text-red-400">
+          {debtor.name.charAt(0).toUpperCase()}
+        </span>
+      </div>
+      <h1 class="text-2xl font-bold text-white">{debtor.name}</h1>
+      {debtor.phone && (
+        <p class="text-slate-400 text-sm mt-1">{debtor.phone}</p>
+      )}
+    </div>
+
+    {message && (
+      <div class={`p-4 rounded-xl text-sm ${
+        messageType === 'success' 
+          ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+          : 'bg-red-500/10 border border-red-500/30 text-red-400'
+      }`}>
+        {message}
+      </div>
+    )}
+
+    <div class={`rounded-2xl p-6 text-center border ${
+      updatedBalance > 0 
+        ? 'bg-gradient-to-br from-red-500/20 to-red-600/10 border-red-500/20' 
+        : 'bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/20'
+    }`}>
+      <p class="text-slate-400 text-sm">
+        {updatedBalance > 0 ? 'Total Hutang' : 'Status'}
+      </p>
+      <p class={`text-4xl font-bold mt-2 ${updatedBalance > 0 ? 'text-red-400' : 'text-green-400'}`}>
+        {updatedBalance > 0 ? `Rp ${updatedBalance.toLocaleString('id-ID')}` : 'LUNAS'}
+      </p>
+    </div>
+
+    {updatedBalance > 0 && (
+      <div class="bg-slate-800/50 rounded-2xl p-5 border border-slate-700/50">
+        <h3 class="font-semibold text-white mb-4 text-center">Bayar Sekarang</h3>
+        
+        <form method="POST" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Jumlah (Rp)</label>
+            <input 
+              type="number" 
+              name="amount" 
+              required
+              min="1"
+              max={updatedBalance}
+              class="w-full px-4 py-4 bg-slate-700/50 border border-slate-600 rounded-xl text-white text-2xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="0"
+            />
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Catatan (opsional)</label>
+            <input 
+              type="text" 
+              name="description"
+              class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="Contoh: Bayar cash"
+            />
+          </div>
+          
+          <button 
+            type="submit"
+            class="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors text-lg"
+          >
+            Bayar
+          </button>
+        </form>
+        
+        <p class="text-slate-500 text-xs text-center mt-3">
+          Hubungi admin untuk info pembayaran
+        </p>
+      </div>
+    )}
+
+    <div class="bg-slate-800/50 rounded-2xl p-5 border border-slate-700/50">
+      <h3 class="font-semibold text-white mb-4">Riwayat</h3>
+      
+      {updatedTx.length === 0 ? (
+        <p class="text-slate-400 text-sm text-center py-4">Belum ada riwayat</p>
+      ) : (
+        <div class="space-y-3">
+          {updatedTx.map((tx) => (
+            <div class="flex items-center justify-between py-3 border-b border-slate-700/50 last:border-0">
+              <div class="flex items-center gap-3">
+                <div class={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  tx.type === 'debt' 
+                    ? 'bg-red-500/20 text-red-400' 
+                    : 'bg-green-500/20 text-green-400'
+                }`}>
+                  {tx.type === 'debt' ? (
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
+                    </svg>
+                  ) : (
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <p class="text-white text-sm">{tx.description}</p>
+                  <p class="text-xs text-slate-500">
+                    {new Date(tx.createdAt).toLocaleDateString('id-ID', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </p>
+                </div>
+              </div>
+              <span class={`font-semibold ${
+                tx.type === 'debt' ? 'text-red-400' : 'text-green-400'
+              }`}>
+                {tx.type === 'debt' ? '+' : '-'}Rp {tx.amount.toLocaleString('id-ID')}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+
+    <div class="text-center pt-4">
+      <p class="text-slate-500 text-xs">
+        Powered by Ridho Pay
+      </p>
+    </div>
+  </div>
+</Layout>

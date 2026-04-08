@@ -5,9 +5,10 @@ interface Props {
   title: string;
   user?: { username: string; role: string } | null;
   isGuest?: boolean;
+  isPublic?: boolean;
 }
 
-const { title, user, isGuest } = Astro.props;
+const { title, user, isGuest, isPublic } = Astro.props;
 ---
 
 <!DOCTYPE html>
@@ -19,50 +20,52 @@ const { title, user, isGuest } = Astro.props;
   <meta name="theme-color" content="#1e293b" />
 </head>
 <body class="min-h-screen text-slate-100">
-  <nav class="bg-slate-800/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-700">
-    <div class="max-w-lg mx-auto px-4 py-3">
-      <div class="flex items-center justify-between">
-        <a href="/" class="text-xl font-bold text-blue-400">
-          💰 Ridho Pay
-        </a>
-        <div class="flex items-center gap-3">
-          {user ? (
-            <div class="flex items-center gap-3">
-              <span class="text-sm text-slate-400 hidden sm:block">
-                {user.username}
-              </span>
-              <span class={`px-2 py-1 rounded-full text-xs font-medium ${
-                user.role === 'admin' 
-                  ? 'bg-blue-500/20 text-blue-400' 
-                  : 'bg-green-500/20 text-green-400'
-              }`}>
-                {user.role}
-              </span>
+  {!isPublic && (
+    <nav class="bg-slate-800/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-700">
+      <div class="max-w-lg mx-auto px-4 py-3">
+        <div class="flex items-center justify-between">
+          <a href="/" class="text-xl font-bold text-blue-400">
+            💰 Ridho Pay
+          </a>
+          <div class="flex items-center gap-3">
+            {user ? (
+              <div class="flex items-center gap-3">
+                <span class="text-sm text-slate-400 hidden sm:block">
+                  {user.username}
+                </span>
+                <span class={`px-2 py-1 rounded-full text-xs font-medium ${
+                  user.role === 'admin' 
+                    ? 'bg-blue-500/20 text-blue-400' 
+                    : 'bg-green-500/20 text-green-400'
+                }`}>
+                  {user.role}
+                </span>
+                <a 
+                  href="/api/logout" 
+                  class="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg text-sm hover:bg-red-500/30 transition-colors"
+                >
+                  Logout
+                </a>
+              </div>
+            ) : (
               <a 
-                href="/api/logout" 
-                class="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg text-sm hover:bg-red-500/30 transition-colors"
+                href="/login" 
+                class="px-4 py-1.5 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors"
               >
-                Logout
+                Login
               </a>
-            </div>
-          ) : (
-            <a 
-              href="/login" 
-              class="px-4 py-1.5 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors"
-            >
-              Login
-            </a>
-          )}
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  </nav>
+    </nav>
+  )}
 
-  <main class="max-w-lg mx-auto px-4 py-6 pb-20">
+  <main class={`max-w-lg mx-auto px-4 py-6 ${isPublic ? 'pb-6' : 'pb-24'}`}>
     <slot />
   </main>
 
-  {(user || isGuest) && (
+  {(user || isGuest) && !isPublic && (
     <nav class="fixed bottom-0 left-0 right-0 bg-slate-800/95 backdrop-blur-md border-t border-slate-700 safe-area-pb">
       <div class="max-w-lg mx-auto flex justify-around py-2">
         {user?.role === 'admin' ? (
@@ -73,11 +76,11 @@ const { title, user, isGuest } = Astro.props;
               </svg>
               <span class="text-xs mt-1">Home</span>
             </a>
-            <a href="/admin/debtors" class="flex flex-col items-center p-2 text-slate-400 hover:text-red-400 transition-colors">
+            <a href="/admin/guest" class="flex flex-col items-center p-2 text-slate-400 hover:text-red-400 transition-colors">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              <span class="text-xs mt-1">Hutang</span>
+              <span class="text-xs mt-1">Pelanggan</span>
             </a>
             <a href="/admin/notes" class="flex flex-col items-center p-2 text-slate-400 hover:text-blue-400 transition-colors">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
