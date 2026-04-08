@@ -7,3 +7,9 @@ pages_build_output_dir = "./dist/client"
 [[kv_namespaces]]
 binding = "KV"
 id = "your-kv-namespace-id"
+
+# Local development KV
+[env.local]
+kv_namespaces = [
+  { binding = "KV", id = "local-kv-id" }
+]

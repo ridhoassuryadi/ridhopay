@@ -40,8 +40,9 @@ if (Astro.request.method === 'POST') {
         return Astro.redirect(`/admin/guest/${debtor.id}?success=created`);
       }
     }
-  } catch (e) {
-    // error
+    } catch (e) {
+    message = 'Terjadi kesalahan. Silakan coba lagi.';
+    messageType = 'error';
   }
 }
 
