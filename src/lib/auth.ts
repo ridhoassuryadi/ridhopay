@@ -60,3 +60,25 @@ export function hashPassword(password: string): string {
 export function verifyPassword(password: string, hash: string): boolean {
   return hashPassword(password) === hash;
 }
+
+const GUEST_COOKIE = 'guest_id';
+
+export function getOrCreateGuestSession(cookies: AstroCookies): { userId: string; username: string } {
+  let guestId = cookies.get(GUEST_COOKIE)?.value;
+  
+  if (!guestId) {
+    guestId = crypto.randomUUID();
+    cookies.set(GUEST_COOKIE, guestId, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 365 * 24 * 60 * 60,
+      path: '/',
+    });
+  }
+  
+  return {
+    userId: guestId,
+    username: 'Tamu',
+  };
+}

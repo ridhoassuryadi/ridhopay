@@ -1,18 +1,14 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { getSession } from '../../lib/auth';
+import { getOrCreateGuestSession } from '../../lib/auth';
 import { KVStore } from '../../lib/kv';
 
-const session = getSession(Astro.cookies);
-
-if (!session || session.role !== 'guest') {
-  return Astro.redirect('/login');
-}
+const guest = getOrCreateGuestSession(Astro.cookies);
 
 const { KV } = Astro.locals.runtime.env;
 const kvStore = new KVStore({ KV });
 const allNotes = await kvStore.getNotes();
-const guestNotes = allNotes.filter(n => n.authorId === session.userId);
+const guestNotes = allNotes.filter(n => n.authorId === guest.userId);
 const sortedNotes = guestNotes.sort((a, b) => b.updatedAt - a.updatedAt);
 
 let message = '';
@@ -31,8 +27,8 @@ if (Astro.request.method === 'POST') {
         await kvStore.createNote({
           title,
           content,
-          authorId: session.userId,
-          authorRole: session.role,
+          authorId: guest.userId,
+          authorRole: 'guest',
         });
         return Astro.redirect('/guest/notes?success=created');
       }
@@ -40,7 +36,7 @@ if (Astro.request.method === 'POST') {
       const id = formData.get('id')?.toString();
       const note = await kvStore.getNoteById(id || '');
       
-      if (note && note.authorId === session.userId) {
+      if (note && note.authorId === guest.userId) {
         await kvStore.deleteNote(id!);
         return Astro.redirect('/guest/notes?success=deleted');
       }
@@ -57,7 +53,7 @@ if (successParam === 'deleted') message = 'Catatan berhasil dihapus';
 if (successParam) messageType = 'success';
 ---
 
-<Layout title="Notes - Guest" user={{ username: session.username, role: session.role }}>
+<Layout title="Notes" isGuest={true}>
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <div>

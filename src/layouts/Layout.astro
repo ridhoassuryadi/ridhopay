@@ -4,9 +4,10 @@ import '../styles/global.css';
 interface Props {
   title: string;
   user?: { username: string; role: string } | null;
+  isGuest?: boolean;
 }
 
-const { title, user } = Astro.props;
+const { title, user, isGuest } = Astro.props;
 ---
 
 <!DOCTYPE html>
@@ -61,10 +62,10 @@ const { title, user } = Astro.props;
     <slot />
   </main>
 
-  {user && (
+  {(user || isGuest) && (
     <nav class="fixed bottom-0 left-0 right-0 bg-slate-800/95 backdrop-blur-md border-t border-slate-700 safe-area-pb">
       <div class="max-w-lg mx-auto flex justify-around py-2">
-        {user.role === 'admin' ? (
+        {user?.role === 'admin' ? (
           <>
             <a href="/admin" class="flex flex-col items-center p-2 text-slate-400 hover:text-blue-400 transition-colors">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
