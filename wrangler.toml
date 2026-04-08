@@ -1,0 +1,9 @@
+name = "ridho-pay"
+compatibility_date = "2024-04-04"
+pages_build_output_dir = "./dist/client"
+
+[vars]
+
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id"

@@ -1,0 +1,235 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getSession } from '../../lib/auth';
+import { KVStore } from '../../lib/kv';
+
+const session = getSession(Astro.cookies);
+
+if (!session || session.role !== 'admin') {
+  return Astro.redirect('/login');
+}
+
+const { KV } = Astro.locals.runtime.env;
+const kvStore = new KVStore({ KV });
+const allDebtors = await kvStore.getDebtors();
+
+const debtorsWithBalance = await Promise.all(
+  allDebtors.map(async (d) => {
+    const balance = await kvStore.getDebtorBalance(d.id);
+    return { ...d, balance };
+  })
+);
+
+const sortedDebtors = debtorsWithBalance.sort((a, b) => b.balance - a.balance);
+const totalDebt = sortedDebtors.reduce((sum, d) => sum + d.balance, 0);
+
+let message = '';
+let messageType = '';
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const action = formData.get('_action')?.toString();
+    
+    if (action === 'create') {
+      const name = formData.get('name')?.toString() || '';
+      const phone = formData.get('phone')?.toString() || '';
+      const address = formData.get('address')?.toString() || '';
+      const initialDebt = parseInt(formData.get('initialDebt')?.toString() || '0');
+      const description = formData.get('description')?.toString() || 'Hutang awal';
+      
+      if (name) {
+        const debtor = await kvStore.createDebtor({
+          name,
+          phone,
+          address,
+          createdBy: session.userId,
+        });
+        
+        if (initialDebt > 0) {
+          await kvStore.createTransaction({
+            debtorId: debtor.id,
+            type: 'debt',
+            amount: initialDebt,
+            description: description || 'Hutang awal',
+            createdBy: session.userId,
+          });
+        }
+        
+        return Astro.redirect('/admin/debtors?success=created');
+      }
+    } else if (action === 'delete') {
+      const id = formData.get('id')?.toString();
+      if (id) {
+        await kvStore.deleteDebtor(id);
+        return Astro.redirect('/admin/debtors?success=deleted');
+      }
+    }
+  } catch (e) {
+    message = 'Terjadi kesalahan';
+    messageType = 'error';
+  }
+}
+
+const successParam = Astro.url.searchParams.get('success');
+if (successParam === 'created') message = 'Debitur berhasil ditambahkan';
+if (successParam === 'deleted') message = 'Debitur berhasil dihapus';
+if (successParam) messageType = 'success';
+---
+
+<Layout title="Hutang - Admin" user={{ username: session.username, role: session.role }}>
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-white">Data Hutang</h1>
+        <p class="text-slate-400 text-sm mt-1">{debtorsWithBalance.length} orang - Rp {totalDebt.toLocaleString('id-ID')}</p>
+      </div>
+      <button 
+        onclick="document.getElementById('createModal').classList.remove('hidden')"
+        class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium transition-colors"
+      >
+        + Tambah
+      </button>
+    </div>
+
+    {message && (
+      <div class={`p-4 rounded-xl text-sm ${
+        messageType === 'success' 
+          ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+          : 'bg-red-500/10 border border-red-500/30 text-red-400'
+      }`}>
+        {message}
+      </div>
+    )}
+
+    <div id="createModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+      <div class="bg-slate-800 rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[85vh] overflow-auto">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-bold text-white">Tambah Debitur</h2>
+            <button 
+              onclick="document.getElementById('createModal').classList.add('hidden')"
+              class="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <form method="POST" class="space-y-4">
+            <input type="hidden" name="_action" value="create" />
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">Nama *</label>
+              <input 
+                type="text" 
+                name="name" 
+                required
+                class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="Nama lengkap"
+              />
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">No. HP</label>
+              <input 
+                type="tel" 
+                name="phone"
+                class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="08xxxxxxxxxx"
+              />
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">Alamat</label>
+              <textarea 
+                name="address" 
+                rows="2"
+                class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                placeholder="Alamat lengkap"
+              ></textarea>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">Hutang Awal (Rp)</label>
+              <input 
+                type="number" 
+                name="initialDebt"
+                min="0"
+                value="0"
+                class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="0"
+              />
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">Keterangan</label>
+              <input 
+                type="text" 
+                name="description"
+                class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="Keterangan hutang"
+              />
+            </div>
+            
+            <button 
+              type="submit"
+              class="w-full py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-colors"
+            >
+              Simpan
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {sortedDebtors.length === 0 ? (
+      <div class="text-center py-16">
+        <div class="w-16 h-16 mx-auto mb-4 bg-slate-800 rounded-2xl flex items-center justify-center">
+          <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        </div>
+        <p class="text-slate-400">Belum ada data hutang</p>
+        <p class="text-slate-500 text-sm mt-1">Tambah data hutang pertama Anda</p>
+      </div>
+    ) : (
+      <div class="space-y-3">
+        {sortedDebtors.map((debtor) => (
+          <a 
+            href={`/admin/debtors/${debtor.id}`}
+            class="block bg-slate-800/50 rounded-2xl p-5 border border-slate-700/50 hover:border-red-500/30 transition-all group"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                  <span class="text-xl font-bold text-red-400">
+                    {debtor.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <h3 class="font-semibold text-white">{debtor.name}</h3>
+                  {debtor.phone && (
+                    <p class="text-sm text-slate-400">{debtor.phone}</p>
+                  )}
+                  <p class="text-xs text-slate-500 mt-1">
+                    {new Date(debtor.updatedAt).toLocaleDateString('id-ID')}
+                  </p>
+                </div>
+              </div>
+              <div class="text-right">
+                <p class={`text-lg font-bold ${debtor.balance > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  Rp {debtor.balance.toLocaleString('id-ID')}
+                </p>
+                <p class="text-xs text-slate-500">
+                  {debtor.balance > 0 ? 'Hutang' : 'Lunas'}
+                </p>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    )}
+  </div>
+</Layout>
